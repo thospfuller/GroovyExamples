@@ -5,7 +5,6 @@
 import com.impossibl.postgres.api.jdbc.PGConnection
 import com.impossibl.postgres.api.jdbc.PGNotificationListener
 import com.impossibl.postgres.jdbc.PGDataSource
-import java.sql.Statement
 
 PGDataSource dataSource = new PGDataSource();
 dataSource.setHost("0.0.0.0")
@@ -14,36 +13,36 @@ dataSource.setDatabaseName("testdb")
 dataSource.setUser("postgres")
 dataSource.setPassword("password")
 
-def pgNotificationListener = new PGNotificationListener () { 
+final def pgNotificationListener = new PGNotificationListener () { 
 
+  @Override
   public void notification(int processId, String channelName, String payload) {
     println("processId $processId, channelName: $channelName, payload: $payload")
   }
 }
 
-PGConnection connection = (PGConnection) dataSource.getConnection()
+final def connection = (PGConnection) dataSource.getConnection()
+
 connection.addNotificationListener(pgNotificationListener)
-Statement statement = connection.createStatement()
-statement.execute("LISTEN exampleChannel")
+
+final def statement = connection.createStatement()
+
+statement.execute("LISTEN examplechannel")
 statement.close()
 
 def time = 60 * 60 * 1000
 
 println "Will sleep for $time milliseconds..."
 
-while (true) {}
-
-/*try {
+try {
   Thread.sleep (time)
 } catch (Throwable thrown) {
   thrown.printStackTrace (System.err)
 } finally {
   connection.close ()
-}/*
+}
 
 print "done!"
-
-connection.close ()
 
 /*
  * The -p 5432:5432 maps localhost:5432 to the [PostgreSQL container ip]:5432
@@ -74,18 +73,21 @@ connection.close ()
  * Note: pg_notify takes the channelName, payload and also note that according to https://www.postgresql.org/docs/9.0/sql-notify.html
  *       "There is no NOTIFY statement in the SQL standard".
  *
- * CREATE OR REPLACE FUNCTION notify_change() RETURNS TRIGGER AS $$
- *   BEGIN
- *     PERFORM pg_notify('test', 'example');
- *     RETURN NEW;
- *   END;
- * $$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION notify_change() RETURNS TRIGGER AS $$
+    BEGIN
+        --
+        -- WARNING: Case is VERY IMPORTANT here! If we use 'exampleChannel' PG converts this to
+        --          examplechannel and no events will be received!!
+        --
+        PERFORM pg_notify('examplechannel', TG_TABLE_NAME);
+        RETURN NEW;
+    END;
+$$ LANGUAGE plpgsql;
  *
- * create trigger table_change 
- *  AFTER INSERT OR UPDATE OR DELETE ON example   
- *  FOR EACH ROW EXECUTE PROCEDURE notify_change();
+create trigger table_change
+  AFTER INSERT OR UPDATE OR DELETE ON example
+  FOR EACH ROW EXECUTE PROCEDURE notify_change();
  *
- * 
  *
  * insert into example (phrase) values ('hello world');
  *
