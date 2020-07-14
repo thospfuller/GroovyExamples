@@ -96,6 +96,4 @@ create trigger table_change
  * [3] https://medium.com/better-programming/connect-from-local-machine-to-postgresql-docker-container-f785f00461a7
  *
  * docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 816f2432df70
- *
- * [4] https://wiki.postgresql.org/wiki/PgNotificationHelper
  */
