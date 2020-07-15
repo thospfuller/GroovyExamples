@@ -42,7 +42,7 @@ try {
   connection.close ()
 }
 
-print "done!"
+print "...done!"
 
 /*
  * The -p 5432:5432 maps localhost:5432 to the [PostgreSQL container ip]:5432
@@ -79,7 +79,7 @@ CREATE OR REPLACE FUNCTION notify_change() RETURNS TRIGGER AS $$
         -- WARNING: Case is VERY IMPORTANT here! If we use 'exampleChannel' PG converts this to
         --          examplechannel and no events will be received!!
         --
-        PERFORM pg_notify('examplechannel', TG_TABLE_NAME);
+        PERFORM pg_notify('examplechannel', NEW.phrase);
         RETURN NEW;
     END;
 $$ LANGUAGE plpgsql;
@@ -96,4 +96,6 @@ create trigger table_change
  * [3] https://medium.com/better-programming/connect-from-local-machine-to-postgresql-docker-container-f785f00461a7
  *
  * docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 816f2432df70
+ *
+ * [4] https://wiki.postgresql.org/wiki/PgNotificationHelper
  */
