@@ -17,32 +17,61 @@ public class ExampleDatabaseChangeListener implements DatabaseChangeListener {
 
     @Override
     public void onDatabaseChangeNotification(DatabaseChangeEvent databaseChangeEvent) {
-        println ("databaseChangeEvent: $databaseChangeEvent")       
+        println ("***** databaseChangeEvent: $databaseChangeEvent")       
     }
 }
 
-def connection = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521:xe", "system", "oracle")
+final def connection = DriverManager.getConnection("jdbc:oracle:thin:@localhost:1521:xe", "system", "oracle")
 
 def databaseProperties = new Properties ()
 
+/*
+ * [6] When the notification type is OCN, any DML transaction that changes one or more registered objects generates
+ *     one notification for each object when it commits.
+ *
+ *     When the notification type is QRCN, any DML transaction that changes the result of one or more registered
+ *     queries generates a notification when it commits. The notification includes the query IDs of the queries whose
+ *     results changed.
+ *
+ *     For either notification type, the notification includes:
+ *
+ *     Name of each changed table
+ *
+ *     Operation type (INSERT, UPDATE, or DELETE)
+ *
+ *     ROWID of each changed row, if the registration was created with the ROWID option and the number of modified rows
+ *     was not too large. For more information, see ROWID Option."
+ */
 databaseProperties.setProperty(OracleConnection.DCN_NOTIFY_ROWIDS, "true")
 databaseProperties.setProperty(OracleConnection.DCN_QUERY_CHANGE_NOTIFICATION, "true")
 
-def databaseChangeRegistration = connection.registerDatabaseChangeNotification(databaseProperties)
+final def databaseChangeRegistration = connection.registerDatabaseChangeNotification(databaseProperties)
 
 databaseChangeRegistration.addListener(new ExampleDatabaseChangeListener ())
 
-def statement = connection.createStatement()
+final def statement = connection.createStatement()
 
 statement.setDatabaseChangeRegistration(databaseChangeRegistration)
 
-def resultSet = statement.executeQuery("select * from example")
+//new Thread ({
 
-while (resultSet.next()) {
-  println "resultSet.phrase: ${resultSet.getString('phrase')}"
-}
+  def ctr = 0
 
-def time = 60 * 60 * 1000
+  while (true) {
+
+    def resultSet = statement.executeQuery("select * from example where example_id = 1")
+
+    while (resultSet.next()) {
+      println "[@ $ctr}] resultSet.phrase: ${resultSet.getString('phrase')}"
+    }
+
+    Thread.sleep (5 * 1000)
+
+    ctr++
+  }
+//}).start ()
+
+final def time = 60 * 60 * 1000
 
 println "Will sleep for $time milliseconds..."
 
@@ -78,16 +107,31 @@ println "...done!"
  *     phrase VARCHAR2(120) NOT NULL
  * );
  *
- * SQL> insert into example values (1, 'one');
- * SQL> insert into example values (2, 'two');
- * SQL> insert into example values (3, 'three');
- * SQL> insert into example values (4, 'four');
- * SQL> insert into example values (5, 'five');
- * SQL> commit;
+ * Run the script and then execute the following in sqlplus:
+ *
+insert into example values (1, 'one');
+insert into example values (2, 'two');
+insert into example values (3, 'three');
+insert into example values (4, 'four');
+insert into example values (5, 'five');
+commit;
+
+update example set phrase = 'one / 1' where example_id = 1;
  *
  * See also:
  *
- * https://docs.oracle.com/cd/B19306_01/B14251_01/adfns_dcn.htm
- * https://docs.oracle.com/en/database/oracle/oracle-database/12.2/jajdb/oracle/jdbc/dcn/class-use/DatabaseChangeRegistration.html
- * https://docs.oracle.com/cd/E18283_01/appdev.112/e13995/oracle/jdbc/OracleStatement.html#setDatabaseChangeRegistration_oracle_jdbc_dcn_DatabaseChangeRegistration_
+ * Oracle Continuous Query Notification Example
+ *
+ * [1] https://docs.oracle.com/cd/B19306_01/B14251_01/adfns_dcn.htm
+ * [2] https://docs.oracle.com/en/database/oracle/oracle-database/12.2/jajdb/oracle/jdbc/dcn/class-use/DatabaseChangeRegistration.html
+ * [3] https://docs.oracle.com/cd/E18283_01/appdev.112/e13995/oracle/jdbc/OracleStatement.html#setDatabaseChangeRegistration_oracle_jdbc_dcn_DatabaseChangeRegistration_
+ * [4] https://docs.oracle.com/en/database/oracle/oracle-database/12.2/jjdbc/continuos-query-notification.html#GUID-6CA108CC-658D-447D-8B8A-ABBBF975871FsetDatabaseChangeRegistration
+ * [5] https://docs.oracle.com/en/database/oracle/oracle-database/12.2/jjdbc/continuos-query-notification.html#GUID-17D0D7C5-77C9-420D-9D13-F668C1056792
+ * - Object Change Notification (OCN)
+ * - Query Result Change Notification (QRCN)
+ *
+ * [6] https://docs.oracle.com/cd/B28359_01/appdev.111/b28424/adfns_cqn.htm#CHDHIADC
+ * - Events that Generate Notifications
+ *
+ * [7] https://docs.oracle.com/cd/E18283_01/appdev.112/e13995/oracle/jdbc/OracleConnection.html && DCN_NOTIFY_ROWIDS
  */
