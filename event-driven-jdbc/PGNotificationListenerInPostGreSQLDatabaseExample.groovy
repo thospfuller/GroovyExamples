@@ -79,6 +79,14 @@ CREATE OR REPLACE FUNCTION notify_change() RETURNS TRIGGER AS $$
         -- WARNING: Case is VERY IMPORTANT here! If we use 'exampleChannel' PG converts this to
         --          examplechannel and no events will be received!!
         --
+        --  UPDATE: [to be confirmed] Case can be handled in PostgreSQL by using double quotes.
+        --
+        --          In theory, if you had the following line as the listener, it would work in camelCase.
+        --
+        --          statement.execute('LISTEN "exampleChannel"');
+        --
+        --          The same applies to any identifier in Postgres.
+        --
         PERFORM pg_notify('examplechannel', NEW.phrase);
         RETURN NEW;
     END;
