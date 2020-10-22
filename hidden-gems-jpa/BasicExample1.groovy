@@ -1,5 +1,14 @@
 @GrabConfig(systemClassLoader=true)
 
+/* If you see this:
+ *
+ * Caught: java.lang.NoClassDefFoundError: Unable to load class org.apache.groovy.jaxb.extensions.JaxbExtensions due to
+ *         missing dependency javax/xml/bind/JAXBContext
+ *
+ * Then for Intellij IDEA:
+ *   File -> Project Structure -> Dependencies -> + -> (add the JAXB dependencies in the groovy lib directory)
+ */
+
 @Grapes(
         @Grab(group="com.h2database", module="h2", version="1.4.200")
 )
