@@ -1,8 +1,12 @@
+@GrabConfig(systemClassLoader = true)
 @Grab(group="com.h2database", module="h2", version="1.4.200")
 @Grab(group='org.hibernate', module='hibernate-core', version='5.4.22.Final')
 @Grab(group='org.hibernate', module='hibernate-entitymanager', version='5.4.22.Final')
-@Grab(group='javax.persistence', module='javax.persistence-api', version='2.2')
 @Grab(group='org.hibernate', module='hibernate-jpamodelgen', version='5.4.22.Final', scope='provided')
+@Grab(group='javax.persistence', module='javax.persistence-api', version='2.2')
+@Grab(group='com.atomikos', module='transactions-jdbc', version='5.0.8')
+@Grab(group='org.slf4j', module='slf4j-api', version='1.7.30')
+@Grab(group='org.slf4j', module='slf4j-simple', version='1.7.30')
 import org.hibernate.jpa.HibernatePersistenceProvider
 import javax.persistence.spi.ClassTransformer
 import javax.persistence.SharedCacheMode
@@ -10,11 +14,16 @@ import javax.sql.DataSource
 import javax.persistence.spi.PersistenceUnitInfo
 import javax.persistence.spi.PersistenceUnitTransactionType
 import javax.persistence.ValidationMode
-import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl
-import org.hibernate.dialect.H2Dialect
-import java.sql.DriverManager
 
-import static org.hibernate.cfg.AvailableSettings.*
+import javax.persistence.Table
+import javax.persistence.Column
+import javax.persistence.Entity
+
+import com.atomikos.jdbc.AtomikosDataSourceBean
+
+//import java.sql.DriverManager
+//
+//def cxn = DriverManager.getConnection("jdbc:h2:mem:ExampleDB;DB_CLOSE_DELAY=-1;")
 
 /* If you see this:
  *
@@ -27,7 +36,18 @@ import static org.hibernate.cfg.AvailableSettings.*
 
 /* https://docs.jboss.org/hibernate/orm/5.2/javadocs/index.html
  * https://stackoverflow.com/questions/1989672/create-jpa-entitymanager-without-persistence-xml-configuration-file
+ *
+ * See also: https://stackoverflow.com/questions/52131659/how-to-enable-xa-for-springboot-h2-datasource
+ *
+ * https://gist.github.com/rafaeltuelho/fb7fc0d372a0cf85a53e
  */
+
+@Entity
+@Table(name="PERSON")
+class Person {
+    @Column(name="NAME")
+    private String name
+}
 
 class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
 
@@ -48,12 +68,44 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
 
     @Override
     public DataSource getJtaDataSource() {
-        return null
+
+        /*
+         * https://javadoc.io/doc/com.atomikos/transactions-jdbc/latest/com/atomikos/jdbc/AtomikosDataSourceBean.html
+         */
+        AtomikosDataSourceBean result = new AtomikosDataSourceBean ()
+
+        def properties = new Properties ()
+
+        properties.setProperty ( "user" , "sa" )
+        properties.setProperty ( "password" , "password" )
+        properties.setProperty ( "URL" , "jdbc:h2:mem:ExampleDB;DB_CLOSE_DELAY=-1;" )
+
+        result.setXaProperties ( properties )
+
+        result.setUniqueResourceName ("exampleJTADataSource")
+        result.setXaDataSourceClassName ("org.h2.jdbcx.JdbcDataSource")
+        result.setPoolSize (100)
+
+        return result
     }
 
     @Override
     public DataSource getNonJtaDataSource() {
+
         return null
+//        AtomikosDataSourceBean result = new AtomikosDataSourceBean ()
+//
+//        result.setUniqueResourceName ("exampleNonJTADataSource")
+//        result.setXaDataSourceClassName ("org.h2.DataSource")
+//        result.set
+//        result.set
+//        result.set
+//
+//        JdbcDataSource ds = new JdbcDataSource();
+//        ds.setURL("jdbc:h2:˜/test");
+//        ds.setUser("sa");
+//
+//        return result
     }
 
     @Override
@@ -63,13 +115,12 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
 
     @Override
     public List<URL> getJarFileUrls() {
-        try {
-            return Collections.list(this.getClass()
-                    .getClassLoader()
-                    .getResources(""))
-        } catch (IOException e) {
-            throw new UncheckedIOException(e)
-        }
+//        try {
+//            return Collections.list(getClass().getClassLoader().getResources(""))
+//        } catch (IOException ioException) {
+//            throw new UncheckedIOException(ioException)
+//        }
+        return null
     }
 
     @Override
@@ -79,7 +130,7 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
 
     @Override
     public List<String> getManagedClassNames() {
-        return Collections.emptyList()
+        return null//(List<String>) Arrays.asList(Person.class.getName())
     }
 
     @Override
@@ -126,7 +177,7 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
 def properties = [
     JPA_JDBC_DRIVER : "org.h2.Driver",
     JPA_JDBC_URL : "jdbc:h2:mem:ExampleDB;DB_CLOSE_DELAY=-1;",
-    DIALECT : H2Dialect.class,
+    DIALECT : "org.hibernate.dialect.H2Dialect",
     HBM2DDL_AUTO : "create",
     SHOW_SQL : true,
     QUERY_STARTUP_CHECKING : true,
@@ -144,18 +195,6 @@ def entityManagerFactory = new HibernatePersistenceProvider().createContainerEnt
 )
 
 def entityManager = entityManagerFactory.createEntityManager()
-
-//def cxn = DriverManager.getConnection("jdbc:h2:mem:ExampleDB;DB_CLOSE_DELAY=-1;")
-
-def entityManagerFactoryBuilder = new EntityManagerFactoryBuilderImpl ()
-
-//@Entity
-//@Table(name="PERSON")
-//class Person {
-//    @Column(name="NAME")
-//    private String name
-//}
-
 
 //cxn.close ()
 
