@@ -1,3 +1,5 @@
+package example
+
 @GrabConfig(systemClassLoader = true)
 @Grab(group="com.h2database", module="h2", version="1.4.200")
 @Grab(group='org.hibernate', module='hibernate-core', version='5.4.22.Final')
@@ -20,10 +22,7 @@ import javax.persistence.Column
 import javax.persistence.Entity
 
 import com.atomikos.jdbc.AtomikosDataSourceBean
-
-//import java.sql.DriverManager
-//
-//def cxn = DriverManager.getConnection("jdbc:h2:mem:ExampleDB;DB_CLOSE_DELAY=-1;")
+import com.atomikos.icatch.jta.UserTransactionManager
 
 /* If you see this:
  *
@@ -34,7 +33,8 @@ import com.atomikos.jdbc.AtomikosDataSourceBean
  *   File -> Project Structure -> Dependencies -> + -> (add the JAXB dependencies in the groovy lib directory)
  */
 
-/* https://docs.jboss.org/hibernate/orm/5.2/javadocs/index.html
+/* https://spring.io/blog/2011/08/15/configuring-spring-and-jta-without-full-java-ee/
+ * https://docs.jboss.org/hibernate/orm/5.2/javadocs/index.html
  * https://stackoverflow.com/questions/1989672/create-jpa-entitymanager-without-persistence-xml-configuration-file
  *
  * See also: https://stackoverflow.com/questions/52131659/how-to-enable-xa-for-springboot-h2-datasource
@@ -44,9 +44,17 @@ import com.atomikos.jdbc.AtomikosDataSourceBean
 
 @Entity
 @Table(name="PERSON")
-class Person {
+public class Person implements Serializable {
     @Column(name="NAME")
     private String name
+
+    String getName() {
+        return name
+    }
+
+    void setName(String name) {
+        this.name = name
+    }
 }
 
 class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
@@ -69,10 +77,15 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
     @Override
     public DataSource getJtaDataSource() {
 
-        /*
+        /* https://www.atomikos.com/Documentation/ConfiguringOracle
+         * https://stackoverflow.com/questions/30858273/atomikos-openjpa-db2-xa-standalone-setautocommittrue-not-allowed
          * https://javadoc.io/doc/com.atomikos/transactions-jdbc/latest/com/atomikos/jdbc/AtomikosDataSourceBean.html
          */
         AtomikosDataSourceBean result = new AtomikosDataSourceBean ()
+
+        result.setUniqueResourceName ("exampleH2JTADataSource")
+        result.setXaDataSourceClassName ("org.h2.jdbcx.JdbcDataSource")
+        result.setPoolSize (100)
 
         def properties = new Properties ()
 
@@ -82,30 +95,12 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
 
         result.setXaProperties ( properties )
 
-        result.setUniqueResourceName ("exampleJTADataSource")
-        result.setXaDataSourceClassName ("org.h2.jdbcx.JdbcDataSource")
-        result.setPoolSize (100)
-
         return result
     }
 
     @Override
     public DataSource getNonJtaDataSource() {
-
         return null
-//        AtomikosDataSourceBean result = new AtomikosDataSourceBean ()
-//
-//        result.setUniqueResourceName ("exampleNonJTADataSource")
-//        result.setXaDataSourceClassName ("org.h2.DataSource")
-//        result.set
-//        result.set
-//        result.set
-//
-//        JdbcDataSource ds = new JdbcDataSource();
-//        ds.setURL("jdbc:h2:˜/test");
-//        ds.setUser("sa");
-//
-//        return result
     }
 
     @Override
@@ -115,12 +110,7 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
 
     @Override
     public List<URL> getJarFileUrls() {
-//        try {
-//            return Collections.list(getClass().getClassLoader().getResources(""))
-//        } catch (IOException ioException) {
-//            throw new UncheckedIOException(ioException)
-//        }
-        return null
+        return Collections.emptyList()
     }
 
     @Override
@@ -128,9 +118,14 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
         return null
     }
 
+    /**
+     * https://docs.oracle.com/javaee/7/api/javax/persistence/spi/PersistenceUnitInfo.html#getManagedClassNames--
+     *
+     * "Each name corresponds to a named class element in the persistence.xml file."
+     */
     @Override
     public List<String> getManagedClassNames() {
-        return null//(List<String>) Arrays.asList(Person.class.getName())
+        return (List<String>) Arrays.asList(Person.class.getName())
     }
 
     @Override
@@ -138,14 +133,20 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
         return false
     }
 
+    /**
+     * https://docs.oracle.com/javaee/7/api/javax/persistence/SharedCacheMode.html
+     */
     @Override
     public SharedCacheMode getSharedCacheMode() {
-        return null
+        return SharedCacheMode.NONE
     }
 
+    /**
+     * https://docs.oracle.com/javaee/7/api/javax/persistence/ValidationMode.html
+     */
     @Override
     public ValidationMode getValidationMode() {
-        return null
+        return ValidationMode.NONE
     }
 
     @Override
@@ -160,19 +161,27 @@ class ExamplePersistenceUnitInfo implements PersistenceUnitInfo {
 
     @Override
     public ClassLoader getClassLoader() {
-        return null
+        return String.class.getClassLoader()
     }
 
     @Override
-    public void addTransformer(ClassTransformer transformer) {
-
-    }
+    public void addTransformer(ClassTransformer transformer) {}
 
     @Override
     public ClassLoader getNewTempClassLoader() {
-        return null
+        return getClassLoader()
     }
 }
+
+/*
+ * From https://www.atomikos.com/Documentation/GettingStartedWithTransactionsEssentials
+ *
+ * "To initialize the transaction manager, create an instance of com.atomikos.icatch.jta.UserTransactionManager then
+ *  call init() on it. Do not forget to call close() during your application shutdown."
+ */
+def userTransactionManager = new UserTransactionManager ()
+
+userTransactionManager.init ()
 
 def properties = [
     JPA_JDBC_DRIVER : "org.h2.Driver",
@@ -189,13 +198,35 @@ def properties = [
     STATEMENT_BATCH_SIZE : 20
 ] as Map<String, Object>
 
-def entityManagerFactory = new HibernatePersistenceProvider().createContainerEntityManagerFactory(
+def hibernatePersistenceProvider = new HibernatePersistenceProvider()
+
+def entityManagerFactory = hibernatePersistenceProvider.createContainerEntityManagerFactory(
     new ExamplePersistenceUnitInfo (),
     properties
 )
 
+/*
+ * INFO: HHH000318: Could not find any META-INF/persistence.xml file in the classpath
+ * Caught: java.lang.NullPointerException: Cannot invoke method createEntityManager() on null object
+ * java.lang.NullPointerException: Cannot invoke method createEntityManager() on null object
+ *
+def entityManagerFactory = new HibernatePersistenceProvider().createEntityManagerFactory(
+    "examplePersistenceUnit",
+    properties
+)
+*/
+
 def entityManager = entityManagerFactory.createEntityManager()
 
-//cxn.close ()
+entityManager.getTransaction().begin();
+
+def person = new Person ()
+
+person.setName ("Fee Bar")
+
+entityManager.persist(person)
+entityManager.getTransaction().commit()
+
+userTransactionManager.close ()
 
 println "...Done!"
